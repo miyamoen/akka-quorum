@@ -1,25 +1,101 @@
 package com.github.miyamoen.quorum
 
-import akka.actor.ActorSystem
-import akka.testkit.{EventFilter, TestEvent, TestProbe}
-import org.joda.time.DateTime
-import org.scalactic.TypeCheckedTripleEquals
-import org.scalatest.{BeforeAndAfterAll, Inspectors, Matchers, WordSpec}
-import org.scalatest.Assertions._
-import scala.concurrent.Await
-import scala.concurrent.duration.DurationInt
+import akka.actor.ActorRef
+import akka.testkit.TestProbe
 
 class StoreSpec extends BaseSpec {
+  val data = Data.create("some message")
+  val initialData = Data.create("initial message")
 
-  "Reading Store" should {
-    "get an message" in {
-      val someMessage = "some message"
-      val store = system.actorOf(Store.props(Data.create(someMessage)))
+  "Opened store" should {
+    "be locked" in {
+      val store = system.actorOf(Store.props(initialData))
+      store ! Store.Lock
+      expectMsg(Store.Succeeded)
+    }
+
+    "not be operated" in {
+      val store = system.actorOf(Store.props(initialData))
       store ! Store.Read
-      expectMsgPF() {
-        case Data(message, _) =>
-          assert(message == someMessage)
-      }
+      expectMsg(Store.Failed)
+
+      store ! Store.Write(data)
+      expectMsg(Store.Failed)
+
+      store ! Store.Release
+      expectMsg(Store.Failed)
+
+      store ! "hogehoge"
+      expectMsg(Store.Failed)
+    }
+  }
+
+  def createLockedStore(): ActorRef = {
+    val store = system.actorOf(Store.props(initialData))
+    store ! Store.Lock
+    expectMsg(Store.Succeeded)
+    store
+  }
+
+  "Locked store" should {
+    "be released" in {
+      val store = createLockedStore
+      store ! Store.Release
+      expectMsg(Store.Succeeded)
+    }
+
+    "be read" in {
+      val store = createLockedStore
+      store ! Store.Read
+      expectMsg(initialData)
+    }
+    "be written" in {
+      val store = createLockedStore
+      store ! Store.Write(data)
+      expectMsg(Store.Succeeded)
+
+      store ! Store.Lock
+      expectMsg(Store.Succeeded)
+
+      store ! Store.Read
+      expectMsg(data)
+    }
+
+    "not be operated" in {
+      val store = createLockedStore
+      store ! Store.Lock
+      expectMsg(Store.Failed)
+
+      store ! "hogehoge"
+      expectMsg(Store.Failed)
+
+    }
+  }
+
+  "Other actor" should {
+    "not lock locked store" in {
+      val store = createLockedStore
+      val other = TestProbe()
+
+      store.tell(Store.Lock, other.ref)
+      other.expectMsg(Store.Failed)
+    }
+
+    "not operate localed store" in {
+      val store = system.actorOf(Store.props(initialData))
+      val other = TestProbe()
+
+      store.tell( Store.Read,other.ref)
+      other.expectMsg(Store.Failed)
+
+      store.tell( Store.Write(data),other.ref)
+      other.expectMsg(Store.Failed)
+
+      store.tell( Store.Release,other.ref)
+      other.expectMsg(Store.Failed)
+
+      store.tell( "hogehoge",other.ref)
+      other.expectMsg(Store.Failed)
     }
   }
 
