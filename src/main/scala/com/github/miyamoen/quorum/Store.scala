@@ -3,9 +3,9 @@ package com.github.miyamoen.quorum
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 
 object Store {
-  def props(data: Data) = Props(new Store(data))
+  def props(message: Message) = Props(new Store(message))
 
-  case class Write(data: Data)
+  case class Write(message: Message)
 
   case object Read
 
@@ -13,13 +13,17 @@ object Store {
 
   case object Release
 
-  case object Succeeded
 
-  case object Failed
+
+  sealed  trait Status
+
+  case object Succeeded extends Status
+
+  case object Failed extends Status
 
 }
 
-class Store(var data: Data) extends Actor with ActorLogging {
+class Store(var message: Message) extends Actor with ActorLogging {
 
   import Store._
 
@@ -38,16 +42,16 @@ class Store(var data: Data) extends Actor with ActorLogging {
   }
 
   def lock: Receive = {
-    case Write(data) if owner.contains(sender())=>
-      this.data = data
+    case Write(message) if owner.contains(sender()) =>
+      this.message = message
       context.become(open)
       sender() ! Succeeded
 
-    case Read if owner.contains(sender())=>
-      sender() ! data
+    case Read if owner.contains(sender()) =>
+      sender() ! message
       context.become(open)
 
-    case Release if owner.contains(sender())=>
+    case Release if owner.contains(sender()) =>
       owner = None
       context.become(open)
       sender() ! Succeeded
