@@ -1,8 +1,10 @@
 package com.github.miyamoen.quorum
 
-import akka.actor.{ActorRef, LoggingFSM}
+import akka.actor.{ActorRef, LoggingFSM, Props}
+import com.github.nscala_time.time.Imports._
 
 object Quorum {
+  def props(stores: List[ActorRef]) = Props(new Quorum(stores))
 
   sealed trait Op
   case object Read extends Op
@@ -14,13 +16,14 @@ object Quorum {
 
   sealed trait State
   case object Open extends State
-  case class Locking(op: Op) extends State
+  case object Locking extends State
   case object Writing extends State
   case object Reading extends State
 
   sealed trait Data
   case object Empty extends Data
   case class Count(count: Int, address: ActorRef) extends Data
+  case class CountWithMessage(count: Int, message: String, address: ActorRef)
   case class Messages(messages: List[Message], address: ActorRef) extends Data
   case class Envelope(message: Message, address: ActorRef) extends Data
 

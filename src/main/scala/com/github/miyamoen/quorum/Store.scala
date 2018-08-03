@@ -5,22 +5,18 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 object Store {
   def props(message: Message) = Props(new Store(message))
 
-  case class Write(message: Message)
+  def createStores(n: Int, message: Message): List[Props] =
+    (1 to n).map(_ => props(message)).toList
 
-  case object Read
+  sealed trait Op
+  case class Write(message: Message) extends Op
+  case object Read extends Op
+  case object Lock extends Op
+  case object Release extends Op
 
-  case object Lock
-
-  case object Release
-
-
-
-  sealed  trait Status
-
+  sealed trait Status
   case object Succeeded extends Status
-
   case object Failed extends Status
-
 }
 
 class Store(var message: Message) extends Actor with ActorLogging {

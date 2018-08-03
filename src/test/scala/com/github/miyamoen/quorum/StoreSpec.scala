@@ -10,6 +10,7 @@ class StoreSpec extends BaseSpec {
   "Opened store" should {
     "be locked" in {
       val store = system.actorOf(Store.props(initialMessage))
+
       store ! Store.Lock
       expectMsg(Store.Succeeded)
     }
