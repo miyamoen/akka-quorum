@@ -31,7 +31,27 @@ class QuorumSpec extends BaseSpec {
           assert(message == "update")
       }
     }
-  }
 
+    "failed" in {
+      val msg = Message.create("initial")
+      val shared: ActorRef = system.actorOf(Store.props(msg))
+      val quorum0 = system.actorOf(
+        Quorum.props(
+          shared :: Store
+            .createStores(10, msg)
+            .map(store => system.actorOf(store))))
+      val quorum1 = system.actorOf(
+        Quorum.props(
+          shared :: Store
+            .createStores(10, msg)
+            .map(store => system.actorOf(store))))
+
+      quorum0 ! Quorum.Read
+      quorum1 ! Quorum.Read
+
+      expectMsg(Quorum.Failed)
+      expectMsg(msg)
+    }
+  }
 
 }
