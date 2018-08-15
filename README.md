@@ -4,3 +4,5 @@
 
 この記事を参考にScalaのAkkaでQuorum Systemを作ってみる
 
+## 設計
+![](quorum設計.jpg)

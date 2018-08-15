@@ -3,12 +3,14 @@ package com.github.miyamoen.quorum
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.util.Timeout
+
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.Future
+import scala.concurrent.duration.{Duration, SECONDS}
 import scala.util.{Failure, Success}
 
 object Main extends App {
-  implicit val timeout: Timeout = Timeout(Duration(30000, MILLISECONDS))
+  implicit val timeout: Timeout = Timeout(Duration(30, SECONDS))
   val system = ActorSystem("QuorumSystem")
   val quorumSystem = system.actorOf(QuorumSystem.props())
 
@@ -37,20 +39,24 @@ object Main extends App {
       println("Write Failed! : {}", ex)
   }
 
-//  val res1 = quorumSystem ? Quorum.Read
-//  res1.map {
-//    case Quorum.Failed =>
-//      None
-//    case message: Message =>
-//      Some(message)
-//  } onComplete {
-//    case Success(Some(message)) =>
-//      println("Read1 Succeeded! : {}", message)
-//    case Success(None) =>
-//      println("Read1 Failed!")
-//    case Failure(ex) =>
-//      println("Read0 Failed! : {}", ex)
-//  }
-  system.terminate()
+  //  val res1 = quorumSystem ? Quorum.Read
+  //  res1.map {
+  //    case Quorum.Failed =>
+  //      None
+  //    case message: Message =>
+  //      Some(message)
+  //  } onComplete {
+  //    case Success(Some(message)) =>
+  //      println("Read1 Succeeded! : {}", message)
+  //    case Success(None) =>
+  //      println("Read1 Failed!")
+  //    case Failure(ex) =>
+  //      println("Read0 Failed! : {}", ex)
+  //  }
+
+  Future.sequence(List(res, writeRes)) onComplete {
+    case _ =>
+      system.terminate()
+  }
 }
 

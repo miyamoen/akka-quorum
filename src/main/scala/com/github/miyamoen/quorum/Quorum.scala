@@ -74,7 +74,7 @@ class Quorum(stores: List[ActorRef])
     case Event(Store.Failed, ReadingLockCount(successes, failedCount, address))
       if successes.size + failedCount + 1 == stores.size =>
       address ! Failed
-      goto(Releasing) using ReleaseCount(0)
+      goto(Releasing) using ReleaseCount(failedCount + 1)
 
     case Event(Store.Succeeded, ReadingLockCount(successes, failedCount, address)) =>
       stay() using ReadingLockCount(sender() :: successes, failedCount, address)
@@ -91,7 +91,7 @@ class Quorum(stores: List[ActorRef])
     case Event(Store.Failed, WritingLockCount(_, successes, failedCount, address))
       if successes.size + failedCount + 1 == stores.size =>
       address ! Failed
-      goto(Releasing) using ReleaseCount(0)
+      goto(Releasing) using ReleaseCount(failedCount + 1)
 
     case Event(Store.Succeeded, WritingLockCount(message, successes, failedCount, address)) =>
       stay() using WritingLockCount(message, sender() :: successes, failedCount, address)
@@ -128,9 +128,10 @@ class Quorum(stores: List[ActorRef])
 
   onTransition {
     case Open -> ReadingLocking =>
-      log.debug("Quorum Locking")
+      log.debug("Quorum Read Lock")
       lock()
     case Open -> WritingLocking =>
+      log.debug("Quorum Write Lock")
       lock()
 
     case ReadingLocking -> Releasing =>
