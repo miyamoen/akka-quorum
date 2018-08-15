@@ -29,6 +29,7 @@ class Store(var message: Message) extends Actor with ActorLogging {
 
   def open: Receive = {
     case Lock =>
+      log.debug("Lock")
       owner = Some(sender())
       context.become(lock)
       sender() ! Succeeded
@@ -39,15 +40,18 @@ class Store(var message: Message) extends Actor with ActorLogging {
 
   def lock: Receive = {
     case Write(message) if owner.contains(sender()) =>
+      log.debug("Write")
       this.message = message
       context.become(open)
       sender() ! Succeeded
 
     case Read if owner.contains(sender()) =>
+      log.debug("Read")
       sender() ! message
       context.become(open)
 
     case Release if owner.contains(sender()) =>
+      log.debug("Release")
       owner = None
       context.become(open)
       sender() ! Succeeded
