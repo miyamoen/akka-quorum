@@ -4,11 +4,11 @@ import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.util.Timeout
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration.{Duration, SECONDS}
 import scala.util.{Failure, Success}
 
 object Main extends App {
-  implicit val timeout: Timeout = Timeout(Duration(30000, MILLISECONDS))
+  implicit val timeout: Timeout = Timeout(Duration(30, SECONDS))
   val system = ActorSystem("QuorumSystem")
   val quorumSystem = system.actorOf(QuorumSystem.props())
 

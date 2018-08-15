@@ -37,9 +37,9 @@ object Quorum {
 
   case object Empty extends Data
 
-  case class ReadingLockCount(successes: List[ActorRef], failedCount: Int, address: ActorRef) extends Data
+  case class ReadingLockCount(rest: List[ActorRef], locked: List[ActorRef], address: ActorRef) extends Data
 
-  case class WritingLockCount(message: String, successes: List[ActorRef], failedCount: Int, address: ActorRef) extends Data
+  case class WritingLockCount(message: String, rest: List[ActorRef], locked: List[ActorRef], address: ActorRef) extends Data
 
   case class ReleaseCount(count: Int) extends Data
 
@@ -60,52 +60,45 @@ class Quorum(stores: List[ActorRef])
 
   when(Open) {
     case Event(Read, _) =>
-      goto(ReadingLocking) using ReadingLockCount(List(), 0, sender())
+      goto(ReadingLocking) using ReadingLockCount(stores.tail, Nil, sender())
 
     case Event(Write(message), _) =>
-      goto(WritingLocking) using WritingLockCount(message, List(), 0, sender())
+      goto(WritingLocking) using WritingLockCount(message, stores.tail, Nil, sender())
   }
 
   when(ReadingLocking) {
-    case Event(Store.Succeeded, ReadingLockCount(successes, failedCount, address))
-      if failedCount == 0 && successes.size + 1 == stores.size =>
-      goto(Reading) using Messages(List.empty, address)
+    case Event(Store.Succeeded, ReadingLockCount(rest, locked, address))
+      if rest.isEmpty && locked.size + 1 == stores.size =>
+      goto(Reading) using Messages(Nil, address)
 
-    case Event(Store.Failed, ReadingLockCount(successes, failedCount, address))
-      if successes.size + failedCount + 1 == stores.size =>
-      address ! Failed
-      goto(Releasing) using ReleaseCount(0)
+    case Event(Store.Succeeded, ReadingLockCount(rest, locked, address)) =>
+      rest.head ! Store.Lock
+      stay() using ReadingLockCount(rest.tail, sender() :: locked, address)
 
-    case Event(Store.Succeeded, ReadingLockCount(successes, failedCount, address)) =>
-      stay() using ReadingLockCount(sender() :: successes, failedCount, address)
-
-    case Event(Store.Failed, ReadingLockCount(successes, failedCount, address)) =>
-      stay() using ReadingLockCount(sender() :: successes, failedCount + 1, address)
+    case Event(Store.Failed, ReadingLockCount(_, locked, _)) =>
+      goto(Releasing) using ReleaseCount(locked.size)
   }
 
   when(WritingLocking) {
-    case Event(Store.Succeeded, WritingLockCount(_, successes, failedCount, address))
-      if failedCount == 0 && successes.size + 1 == stores.size =>
+    case Event(Store.Succeeded, WritingLockCount(_, rest, locked, address))
+      if rest.isEmpty && locked.size + 1 == stores.size =>
       goto(Writing) using WriteCount(0, address)
 
-    case Event(Store.Failed, WritingLockCount(_, successes, failedCount, address))
-      if successes.size + failedCount + 1 == stores.size =>
-      address ! Failed
-      goto(Releasing) using ReleaseCount(0)
+    case Event(Store.Succeeded, WritingLockCount(message, rest, locked, address)) =>
+      rest.head ! Store.Lock
+      stay() using WritingLockCount(message, rest.tail, sender() :: locked, address)
 
-    case Event(Store.Succeeded, WritingLockCount(message, successes, failedCount, address)) =>
-      stay() using WritingLockCount(message, sender() :: successes, failedCount, address)
+    case Event(Store.Failed, WritingLockCount(_, _, locked, _)) =>
+      goto(Releasing) using ReleaseCount(locked.size)
 
-    case Event(Store.Failed, WritingLockCount(message, successes, failedCount, address)) =>
-      stay() using WritingLockCount(message, successes, failedCount + 1, address)
   }
 
   when(Releasing) {
-    case Event(_: Store.Status, ReleaseCount(count)) if count + 1 == stores.size =>
+    case Event(_: Store.Status, ReleaseCount(count)) if count - 1 == 0 =>
       goto(Open) using Empty
 
     case Event(_: Store.Status, ReleaseCount(count)) =>
-      stay() using ReleaseCount(count + 1)
+      stay() using ReleaseCount(count - 1)
   }
 
   when(Reading) {
@@ -129,15 +122,16 @@ class Quorum(stores: List[ActorRef])
   onTransition {
     case Open -> ReadingLocking =>
       log.debug("Quorum Locking")
-      lock()
+      stores.head ! Store.Lock
+
     case Open -> WritingLocking =>
-      lock()
+      stores.head ! Store.Lock
 
     case ReadingLocking -> Releasing =>
       log.debug("Quorum Read Lock Release")
       stateData match {
-        case ReadingLockCount(successes, _, _) =>
-          successes.foreach(store => store ! Store.Release)
+        case ReadingLockCount(_, locked, _) =>
+          locked.foreach(store => store ! Store.Release)
       }
     case WritingLocking -> Releasing =>
       log.debug("Quorum Write Lock Release")
