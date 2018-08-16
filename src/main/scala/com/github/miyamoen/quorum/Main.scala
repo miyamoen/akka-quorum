@@ -39,22 +39,22 @@ object Main extends App {
       println("Write Failed! : {}", ex)
   }
 
-  //  val res1 = quorumSystem ? Quorum.Read
-  //  res1.map {
-  //    case Quorum.Failed =>
-  //      None
-  //    case message: Message =>
-  //      Some(message)
-  //  } onComplete {
-  //    case Success(Some(message)) =>
-  //      println("Read1 Succeeded! : {}", message)
-  //    case Success(None) =>
-  //      println("Read1 Failed!")
-  //    case Failure(ex) =>
-  //      println("Read0 Failed! : {}", ex)
-  //  }
+    val res1 = quorumSystem ? Quorum.Read
+    res1.map {
+      case Quorum.Failed =>
+        None
+      case message: Message =>
+        Some(message)
+    } onComplete {
+      case Success(Some(message)) =>
+        println("Read1 Succeeded! : {}", message)
+      case Success(None) =>
+        println("Read1 Failed!")
+      case Failure(ex) =>
+        println("Read1 Failed! : {}", ex)
+    }
 
-  Future.sequence(List(res, writeRes)) onComplete {
+  Future.sequence(List(res,res1, writeRes)) onComplete {
     case _ =>
       system.terminate()
   }

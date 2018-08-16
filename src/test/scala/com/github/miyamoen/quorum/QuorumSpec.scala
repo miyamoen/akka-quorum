@@ -32,7 +32,7 @@ class QuorumSpec extends BaseSpec {
       }
     }
 
-    "failed" in {
+    "be written and read" in {
       val msg = Message.create("initial")
       val shared: ActorRef = system.actorOf(Store.props(msg))
       val quorum0 = system.actorOf(
@@ -49,7 +49,7 @@ class QuorumSpec extends BaseSpec {
       quorum0 ! Quorum.Read
       quorum1 ! Quorum.Read
 
-      expectMsg(Quorum.Failed)
+      expectMsg(msg)
       expectMsg(msg)
     }
   }
