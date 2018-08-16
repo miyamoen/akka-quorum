@@ -9,50 +9,54 @@ object Store {
     (1 to n).map(_ => props(message)).toList
 
   sealed trait Operation
+
   case class Write(message: Message) extends Operation
+
   case object Read extends Operation
+
   case object Lock extends Operation
+
   case object Release extends Operation
 
   sealed trait Result
+
   case class Succeeded(message: String) extends Result
+
   case class Failed(message: String) extends Result
+
 }
 
-class Store(var message: Message) extends Actor with ActorLogging {
+class Store(initialMessage: Message) extends Actor with ActorLogging {
+  var message: Message = initialMessage
 
   import Store._
-
-  var owner: Option[ActorRef] = None
 
   override def receive: Receive = open
 
   def open: Receive = {
     case Lock =>
       log.debug("Locked by {}", sender())
-      owner = Some(sender())
-      context.become(lock)
+      context.become(lock(sender()))
       sender() ! Succeeded("Lock")
 
     case op =>
       sender() ! Failed(op.toString)
   }
 
-  def lock: Receive = {
-    case Write(message) if owner.contains(sender()) =>
+  def lock(owner: ActorRef): Receive = {
+    case Write(updateMessage) if owner == sender() =>
       log.debug("Written by {}", sender())
-      this.message = message
+      this.message = updateMessage
       context.become(open)
       sender() ! Succeeded("Write")
 
-    case Read if owner.contains(sender()) =>
+    case Read if owner == sender() =>
       log.debug("Read by {}", sender())
       sender() ! message
       context.become(open)
 
-    case Release if owner.contains(sender()) =>
+    case Release if owner == sender() =>
       log.debug("Released by {}", sender())
-      owner = None
       context.become(open)
       sender() ! Succeeded("Release")
 
