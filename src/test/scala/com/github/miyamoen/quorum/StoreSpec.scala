@@ -12,29 +12,29 @@ class StoreSpec extends BaseSpec {
       val store = system.actorOf(Store.props(initialMessage))
 
       store ! Store.Lock
-      expectMsg(Store.Succeeded)
+      expectMsg(Store.Succeeded("Lock"))
     }
 
     "not be operated" in {
       val store = system.actorOf(Store.props(initialMessage))
       store ! Store.Read
-      expectMsg(Store.Failed)
+      expectMsg(Store.Failed("Read"))
 
       store ! Store.Write(message)
-      expectMsg(Store.Failed)
+      expectMsg(Store.Failed(Store.Write(message).toString))
 
       store ! Store.Release
-      expectMsg(Store.Failed)
+      expectMsg(Store.Failed("Release"))
 
       store ! "hogehoge"
-      expectMsg(Store.Failed)
+      expectMsg(Store.Failed("hogehoge"))
     }
   }
 
   def createLockedStore(): ActorRef = {
     val store = system.actorOf(Store.props(initialMessage))
     store ! Store.Lock
-    expectMsg(Store.Succeeded)
+    expectMsg(Store.Succeeded("Lock"))
     store
   }
 
@@ -42,7 +42,7 @@ class StoreSpec extends BaseSpec {
     "be released" in {
       val store = createLockedStore()
       store ! Store.Release
-      expectMsg(Store.Succeeded)
+      expectMsg(Store.Succeeded("Release"))
     }
 
     "be read" in {
@@ -53,10 +53,10 @@ class StoreSpec extends BaseSpec {
     "be written" in {
       val store = createLockedStore()
       store ! Store.Write(message)
-      expectMsg(Store.Succeeded)
+      expectMsg(Store.Succeeded("Write"))
 
       store ! Store.Lock
-      expectMsg(Store.Succeeded)
+      expectMsg(Store.Succeeded("Lock"))
 
       store ! Store.Read
       expectMsg(message)
@@ -65,10 +65,10 @@ class StoreSpec extends BaseSpec {
     "not be operated" in {
       val store = createLockedStore()
       store ! Store.Lock
-      expectMsg(Store.Failed)
+      expectMsg(Store.Failed("Lock"))
 
       store ! "hogehoge"
-      expectMsg(Store.Failed)
+      expectMsg(Store.Failed("hogehoge"))
 
     }
   }
@@ -79,7 +79,7 @@ class StoreSpec extends BaseSpec {
       val other = TestProbe()
 
       store.tell(Store.Lock, other.ref)
-      other.expectMsg(Store.Failed)
+      other.expectMsg(Store.Failed("Lock"))
     }
 
     "not operate localed store" in {
@@ -87,16 +87,16 @@ class StoreSpec extends BaseSpec {
       val other = TestProbe()
 
       store.tell(Store.Read, other.ref)
-      other.expectMsg(Store.Failed)
+      other.expectMsg(Store.Failed("Read"))
 
       store.tell(Store.Write(message), other.ref)
-      other.expectMsg(Store.Failed)
+      other.expectMsg(Store.Failed(Store.Write(message).toString))
 
       store.tell(Store.Release, other.ref)
-      other.expectMsg(Store.Failed)
+      other.expectMsg(Store.Failed("Release"))
 
       store.tell("hogehoge", other.ref)
-      other.expectMsg(Store.Failed)
+      other.expectMsg(Store.Failed("hogehoge"))
     }
   }
 

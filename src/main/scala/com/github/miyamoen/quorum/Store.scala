@@ -15,8 +15,8 @@ object Store {
   case object Release extends Op
 
   sealed trait Status
-  case object Succeeded extends Status
-  case object Failed extends Status
+  case class Succeeded(message: String) extends Status
+  case class Failed(message: String) extends Status
 }
 
 class Store(var message: Message) extends Actor with ActorLogging {
@@ -32,10 +32,10 @@ class Store(var message: Message) extends Actor with ActorLogging {
       log.debug("Lock")
       owner = Some(sender())
       context.become(lock)
-      sender() ! Succeeded
+      sender() ! Succeeded("Lock")
 
-    case _ =>
-      sender() ! Failed
+    case op =>
+      sender() ! Failed(op.toString)
   }
 
   def lock: Receive = {
@@ -43,7 +43,7 @@ class Store(var message: Message) extends Actor with ActorLogging {
       log.debug("Write")
       this.message = message
       context.become(open)
-      sender() ! Succeeded
+      sender() ! Succeeded("Write")
 
     case Read if owner.contains(sender()) =>
       log.debug("Read")
@@ -54,10 +54,10 @@ class Store(var message: Message) extends Actor with ActorLogging {
       log.debug("Release")
       owner = None
       context.become(open)
-      sender() ! Succeeded
+      sender() ! Succeeded("Release")
 
-    case _ =>
-      sender() ! Failed
+    case op =>
+      sender() ! Failed(op.toString)
 
   }
 }

@@ -24,6 +24,5 @@ class QuorumSystem extends Actor with ActorLogging {
   override def receive: Receive = {
     case op: Quorum.Op =>
       Random.shuffle(quorums).head forward op
-
   }
 }
