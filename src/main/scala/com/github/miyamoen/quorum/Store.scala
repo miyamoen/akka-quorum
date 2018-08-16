@@ -14,9 +14,9 @@ object Store {
   case object Lock extends Op
   case object Release extends Op
 
-  sealed trait Status
-  case class Succeeded(message: String) extends Status
-  case class Failed(message: String) extends Status
+  sealed trait Result
+  case class Succeeded(message: String) extends Result
+  case class Failed(message: String) extends Result
 }
 
 class Store(var message: Message) extends Actor with ActorLogging {

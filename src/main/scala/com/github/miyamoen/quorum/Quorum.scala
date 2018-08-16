@@ -12,11 +12,11 @@ object Quorum {
 
   case class Write(message: String) extends Op
 
-  sealed trait Status
+  sealed trait Result
 
-  case object Succeeded extends Status
+  case object Succeeded extends Result
 
-  case object Failed extends Status
+  case object Failed extends Result
 
   sealed trait State
 
@@ -84,11 +84,11 @@ class Quorum(stores: List[ActorRef])
   }
 
   when(Releasing) {
-    case Event(_: Store.Status, ReleaseCount(count, writeMessage, address)) if count - 1 == 0 =>
+    case Event(_: Store.Result, ReleaseCount(count, writeMessage, address)) if count - 1 == 0 =>
       log.debug("Quorum finish release")
       goto(Locking) using LockCount(writeMessage, stores.tail, Nil, address)
 
-    case Event(_: Store.Status, ReleaseCount(count, writeMessage, address)) =>
+    case Event(_: Store.Result, ReleaseCount(count, writeMessage, address)) =>
       stay() using ReleaseCount(count - 1, writeMessage, address)
   }
 

@@ -30,7 +30,7 @@ object Main extends App {
   }
 
   val writeRes = quorumSystem ? Quorum.Write("更新")
-  writeRes.mapTo[Quorum.Status] onComplete {
+  writeRes.mapTo[Quorum.Result] onComplete {
     case Success(Quorum.Succeeded) =>
       println("Write Succeeded!")
     case Success(Quorum.Failed) =>
