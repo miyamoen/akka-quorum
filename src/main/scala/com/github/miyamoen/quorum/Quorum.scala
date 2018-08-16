@@ -6,11 +6,11 @@ import com.github.nscala_time.time.Imports._
 object Quorum {
   def props(stores: List[ActorRef]) = Props(new Quorum(stores))
 
-  sealed trait Op
+  sealed trait Operation
 
-  case object Read extends Op
+  case object Read extends Operation
 
-  case class Write(message: String) extends Op
+  case class Write(message: String) extends Operation
 
   sealed trait Result
 

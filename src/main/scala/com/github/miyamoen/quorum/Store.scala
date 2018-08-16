@@ -8,11 +8,11 @@ object Store {
   def createStores(n: Int, message: Message): List[Props] =
     (1 to n).map(_ => props(message)).toList
 
-  sealed trait Op
-  case class Write(message: Message) extends Op
-  case object Read extends Op
-  case object Lock extends Op
-  case object Release extends Op
+  sealed trait Operation
+  case class Write(message: Message) extends Operation
+  case object Read extends Operation
+  case object Lock extends Operation
+  case object Release extends Operation
 
   sealed trait Result
   case class Succeeded(message: String) extends Result

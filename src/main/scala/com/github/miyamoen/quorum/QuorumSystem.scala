@@ -22,7 +22,7 @@ class QuorumSystem extends Actor with ActorLogging {
   val quorums: List[ActorRef] = (1 to 200).map(_ => context.actorOf(Quorum.props(Random.shuffle(stores).take(size / 2 + 1)))).toList
 
   override def receive: Receive = {
-    case op: Quorum.Op =>
+    case op: Quorum.Operation =>
       Random.shuffle(quorums).head forward op
   }
 }
