@@ -4,8 +4,8 @@ import akka.actor.ActorRef
 import akka.testkit.TestProbe
 
 class StoreSpec extends BaseSpec {
-  val message: Message = Message.create("some message")
-  val initialMessage: Message = Message.create("initial message")
+  val message: Message = Message("some message")
+  val initialMessage: Message = Message("initial message")
 
   "Opened store" should {
     "be locked" in {

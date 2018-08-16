@@ -139,7 +139,7 @@ class Quorum(stores: List[ActorRef])
       log.debug("Quorum Write")
       stateData match {
         case LockCount(Some(message), _, _, _) =>
-          write(Message.create(message))
+          write(Message(message))
       }
   }
 

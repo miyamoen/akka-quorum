@@ -5,7 +5,7 @@ import akka.actor.ActorRef
 class QuorumSpec extends BaseSpec {
   "Quorum" should {
     "be read" in {
-      val msg = Message.create("initial")
+      val msg = Message("initial")
       val stores: List[ActorRef] = Store
         .createStores(10, msg)
         .map(store => system.actorOf(store))
@@ -16,7 +16,7 @@ class QuorumSpec extends BaseSpec {
     }
 
     "be written" in {
-      val msg = Message.create("initial")
+      val msg = Message("initial")
       val stores: List[ActorRef] = Store
         .createStores(10, msg)
         .map(store => system.actorOf(store))
@@ -33,7 +33,7 @@ class QuorumSpec extends BaseSpec {
     }
 
     "be written and read" in {
-      val msg = Message.create("initial")
+      val msg = Message("initial")
       val shared: ActorRef = system.actorOf(Store.props(msg))
       val quorum0 = system.actorOf(
         Quorum.props(
