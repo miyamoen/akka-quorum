@@ -36,20 +36,21 @@ object Quorum {
   case object Empty extends Data
 
   case class LockCount(writeMessage: Option[String], rest: List[ActorRef], locked: List[ActorRef], replyTo: ActorRef) extends Data {
-    def isComplete(stores: List[ActorRef]) : Boolean = rest.isEmpty && locked.size + 1 == stores.size
-    def hasLockedStores : Boolean = locked.nonEmpty
+    def isComplete(stores: List[ActorRef]): Boolean = rest.isEmpty && locked.size + 1 == stores.size
+
+    def hasLockedStores: Boolean = locked.nonEmpty
   }
 
   case class ReleaseCount(count: Int, writeMessage: Option[String], replyTo: ActorRef) extends Data {
-    def isComplete : Boolean = count - 1 == 0
+    def isComplete: Boolean = count - 1 == 0
   }
 
   case class MessageCount(messages: List[Message], replyTo: ActorRef) extends Data {
-    def isComplete(stores: List[ActorRef]) : Boolean = messages.size + 1 >= stores.size
+    def isComplete(stores: List[ActorRef]): Boolean = messages.size + 1 >= stores.size
   }
 
   case class WriteCount(count: Int, replyTo: ActorRef) extends Data {
-    def isComplete(stores : List[ActorRef]) : Boolean = count + 1 == stores.size
+    def isComplete(stores: List[ActorRef]): Boolean = count + 1 == stores.size
   }
 
 }
@@ -77,16 +78,17 @@ class Quorum(stores: List[ActorRef])
       log.debug("Quorum finish lock to Write")
       goto(Writing) using WriteCount(0, replyTo)
 
-    case Event(Store.Succeeded(_), LockCount(writeMessage, rest, locked, replyTo)) =>
-      rest.head ! Store.Lock
-      stay() using LockCount(writeMessage, rest = rest.tail, locked = sender() :: locked, replyTo)
+    case Event(Store.Succeeded(_), lockCount: LockCount) =>
+      val restHead :: restTail = lockCount.rest
+      restHead ! Store.Lock
+      stay() using lockCount.copy(rest = restTail, locked = sender() :: lockCount.locked)
 
     case Event(Store.Failed(_), lockCount@LockCount(writeMessage, _, locked, replyTo)) if lockCount.hasLockedStores =>
       log.debug("Quorum locked store count: {}", locked.size)
       goto(Releasing) using ReleaseCount(locked.size, writeMessage, replyTo)
 
-    case Event(Store.Failed(_), lockCount@LockCount(writeMessage, _, _, replyTo)) if !lockCount.hasLockedStores =>
-      goto(Locking) using LockCount(writeMessage, rest = stores.tail, locked = Nil, replyTo)
+    case Event(Store.Failed(_), lockCount: LockCount) if !lockCount.hasLockedStores =>
+      goto(Locking) using lockCount.copy(rest = stores.tail, locked = Nil)
   }
 
   when(Releasing) {
@@ -94,8 +96,8 @@ class Quorum(stores: List[ActorRef])
       log.debug("Quorum finish release")
       goto(Locking) using LockCount(writeMessage, rest = stores.tail, locked = Nil, replyTo)
 
-    case Event(_: Store.Result, ReleaseCount(count, writeMessage, replyTo)) =>
-      stay() using ReleaseCount(count - 1, writeMessage, replyTo)
+    case Event(_: Store.Result, releaseCount: ReleaseCount) =>
+      stay() using releaseCount.copy(count = releaseCount.count - 1)
   }
 
   when(Reading) {
@@ -103,8 +105,8 @@ class Quorum(stores: List[ActorRef])
       replyTo ! (message :: messages).maxBy(msg => msg.timestamp)
       goto(Open) using Empty
 
-    case Event(message: Message, MessageCount(messages, replyTo)) =>
-      stay() using MessageCount(message :: messages, replyTo)
+    case Event(message: Message, messageCount: MessageCount) =>
+      stay() using messageCount.copy(messages = message :: messageCount.messages)
   }
 
   when(Writing) {
@@ -112,8 +114,8 @@ class Quorum(stores: List[ActorRef])
       replyTo ! Succeeded
       goto(Open) using Empty
 
-    case Event(Store.Succeeded(_), WriteCount(count, replyTo)) =>
-      stay() using WriteCount(count + 1, replyTo)
+    case Event(Store.Succeeded(_), writeCount : WriteCount) =>
+      stay() using writeCount.copy(count = writeCount.count + 1)
   }
 
   onTransition {
