@@ -6,3 +6,5 @@
 
 ## 設計
 ![](quorum設計.jpg)
+
+![Quorumの状態遷移図](https://cacoo.com/diagrams/8NszqID4Ir6UXMez)

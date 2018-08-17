@@ -35,13 +35,13 @@ object Quorum {
 
   case object Empty extends Data
 
-  case class LockCount(writeMessage: Option[String], rest: List[ActorRef], locked: List[ActorRef], address: ActorRef) extends Data
+  case class LockCount(writeMessage: Option[String], rest: List[ActorRef], locked: List[ActorRef], replyTo: ActorRef) extends Data
 
-  case class ReleaseCount(count: Int, writeMessage: Option[String], address: ActorRef) extends Data
+  case class ReleaseCount(count: Int, writeMessage: Option[String], replyTo: ActorRef) extends Data
 
-  case class Messages(messages: List[Message], address: ActorRef) extends Data
+  case class Messages(messages: List[Message], replyTo: ActorRef) extends Data
 
-  case class WriteCount(count: Int, address: ActorRef) extends Data
+  case class WriteCount(count: Int, replyTo: ActorRef) extends Data
 
 }
 
@@ -60,54 +60,53 @@ class Quorum(stores: List[ActorRef])
       goto(Locking) using LockCount(writeMessage = Some(message), rest = stores.tail, locked = Nil, sender())
   }
   when(Locking) {
-    case Event(Store.Succeeded(_), LockCount(None, rest, locked, address))
+    case Event(Store.Succeeded(_), LockCount(None, rest, locked, replyTo))
       if rest.isEmpty && locked.size + 1 == stores.size =>
       log.debug("Quorum finish lock to Read")
-      goto(Reading) using Messages(Nil, address)
+      goto(Reading) using Messages(Nil, replyTo)
 
-    case Event(Store.Succeeded(_), LockCount(Some(_), rest, locked, address))
+    case Event(Store.Succeeded(_), LockCount(Some(_), rest, locked, replyTo))
       if rest.isEmpty && locked.size + 1 == stores.size =>
       log.debug("Quorum finish lock to Write")
-      goto(Writing) using WriteCount(0, address)
+      goto(Writing) using WriteCount(0, replyTo)
 
-    case Event(Store.Succeeded(_), LockCount(writeMessage, rest, locked, address)) =>
+    case Event(Store.Succeeded(_), LockCount(writeMessage, rest, locked, replyTo)) =>
       rest.head ! Store.Lock
-      stay() using LockCount(writeMessage, rest = rest.tail, locked = sender() :: locked, address)
+      stay() using LockCount(writeMessage, rest = rest.tail, locked = sender() :: locked, replyTo)
 
-    case Event(Store.Failed(_), LockCount(writeMessage, _, locked, address)) if locked.nonEmpty =>
+    case Event(Store.Failed(_), LockCount(writeMessage, _, locked, replyTo)) if locked.nonEmpty =>
       log.debug("Quorum locked store count: {}", locked.size)
-      //      address ! Failed
-      goto(Releasing) using ReleaseCount(locked.size, writeMessage, address)
+      goto(Releasing) using ReleaseCount(locked.size, writeMessage, replyTo)
 
-    case Event(Store.Failed(_), LockCount(writeMessage, _, locked, address)) if locked.isEmpty =>
-      goto(Locking) using LockCount(writeMessage, rest = stores.tail, locked = Nil, address)
+    case Event(Store.Failed(_), LockCount(writeMessage, _, locked, replyTo)) if locked.isEmpty =>
+      goto(Locking) using LockCount(writeMessage, rest = stores.tail, locked = Nil, replyTo)
   }
 
   when(Releasing) {
-    case Event(_: Store.Result, ReleaseCount(count, writeMessage, address)) if count - 1 == 0 =>
+    case Event(_: Store.Result, ReleaseCount(count, writeMessage, replyTo)) if count - 1 == 0 =>
       log.debug("Quorum finish release")
-      goto(Locking) using LockCount(writeMessage, rest = stores.tail, locked = Nil, address)
+      goto(Locking) using LockCount(writeMessage, rest = stores.tail, locked = Nil, replyTo)
 
-    case Event(_: Store.Result, ReleaseCount(count, writeMessage, address)) =>
-      stay() using ReleaseCount(count - 1, writeMessage, address)
+    case Event(_: Store.Result, ReleaseCount(count, writeMessage, replyTo)) =>
+      stay() using ReleaseCount(count - 1, writeMessage, replyTo)
   }
 
   when(Reading) {
-    case Event(message: Message, Messages(messages, address)) if messages.size + 1 >= stores.size =>
-      address ! (message :: messages).maxBy(msg => msg.timestamp)
+    case Event(message: Message, Messages(messages, replyTo)) if messages.size + 1 >= stores.size =>
+      replyTo ! (message :: messages).maxBy(msg => msg.timestamp)
       goto(Open) using Empty
 
-    case Event(message: Message, Messages(messages, address)) =>
-      stay() using Messages(message :: messages, address)
+    case Event(message: Message, Messages(messages, replyTo)) =>
+      stay() using Messages(message :: messages, replyTo)
   }
 
   when(Writing) {
-    case Event(Store.Succeeded(_), WriteCount(count, address)) if count + 1 == stores.size =>
-      address ! Succeeded
+    case Event(Store.Succeeded(_), WriteCount(count, replyTo)) if count + 1 == stores.size =>
+      replyTo ! Succeeded
       goto(Open) using Empty
 
-    case Event(Store.Succeeded(_), WriteCount(count, address)) =>
-      stay() using WriteCount(count + 1, address)
+    case Event(Store.Succeeded(_), WriteCount(count, replyTo)) =>
+      stay() using WriteCount(count + 1, replyTo)
   }
 
   onTransition {
