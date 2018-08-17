@@ -54,10 +54,10 @@ class Quorum(stores: List[ActorRef])
 
   when(Open) {
     case Event(Read, _) =>
-      goto(Locking) using LockCount(None, stores.tail, Nil, sender())
+      goto(Locking) using LockCount(writeMessage = None, rest = stores.tail, locked = Nil, sender())
 
     case Event(Write(message), _) =>
-      goto(Locking) using LockCount(Some(message), stores.tail, Nil, sender())
+      goto(Locking) using LockCount(writeMessage = Some(message), rest = stores.tail, locked = Nil, sender())
   }
   when(Locking) {
     case Event(Store.Succeeded(_), LockCount(None, rest, locked, address))
@@ -72,7 +72,7 @@ class Quorum(stores: List[ActorRef])
 
     case Event(Store.Succeeded(_), LockCount(writeMessage, rest, locked, address)) =>
       rest.head ! Store.Lock
-      stay() using LockCount(writeMessage, rest.tail, sender() :: locked, address)
+      stay() using LockCount(writeMessage, rest = rest.tail, locked = sender() :: locked, address)
 
     case Event(Store.Failed(_), LockCount(writeMessage, _, locked, address)) if locked.nonEmpty =>
       log.debug("Quorum locked store count: {}", locked.size)
@@ -80,13 +80,13 @@ class Quorum(stores: List[ActorRef])
       goto(Releasing) using ReleaseCount(locked.size, writeMessage, address)
 
     case Event(Store.Failed(_), LockCount(writeMessage, _, locked, address)) if locked.isEmpty =>
-      goto(Locking) using LockCount(writeMessage, stores.tail, Nil, address)
+      goto(Locking) using LockCount(writeMessage, rest = stores.tail, locked = Nil, address)
   }
 
   when(Releasing) {
     case Event(_: Store.Result, ReleaseCount(count, writeMessage, address)) if count - 1 == 0 =>
       log.debug("Quorum finish release")
-      goto(Locking) using LockCount(writeMessage, stores.tail, Nil, address)
+      goto(Locking) using LockCount(writeMessage, rest = stores.tail, locked = Nil, address)
 
     case Event(_: Store.Result, ReleaseCount(count, writeMessage, address)) =>
       stay() using ReleaseCount(count - 1, writeMessage, address)
