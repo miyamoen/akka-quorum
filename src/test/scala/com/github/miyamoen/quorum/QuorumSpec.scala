@@ -7,7 +7,7 @@ class QuorumSpec extends BaseSpec {
     "be read" in {
       val msg = Message("initial")
       val stores: List[ActorRef] = Store
-        .createStores(10, msg)
+        .createStoreProps(10, msg)
         .map(store => system.actorOf(store))
       val quorum = system.actorOf(Quorum.props(stores))
 
@@ -18,7 +18,7 @@ class QuorumSpec extends BaseSpec {
     "be written" in {
       val msg = Message("initial")
       val stores: List[ActorRef] = Store
-        .createStores(10, msg)
+        .createStoreProps(10, msg)
         .map(store => system.actorOf(store))
       val quorum = system.actorOf(Quorum.props(stores))
 
@@ -38,12 +38,12 @@ class QuorumSpec extends BaseSpec {
       val quorum0 = system.actorOf(
         Quorum.props(
           shared :: Store
-            .createStores(10, msg)
+            .createStoreProps(10, msg)
             .map(store => system.actorOf(store))))
       val quorum1 = system.actorOf(
         Quorum.props(
           shared :: Store
-            .createStores(10, msg)
+            .createStoreProps(10, msg)
             .map(store => system.actorOf(store))))
 
       quorum0 ! Quorum.Read

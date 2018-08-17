@@ -5,7 +5,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 object Store {
   def props(message: Message) = Props(new Store(message))
 
-  def createStores(n: Int, message: Message): List[Props] =
+  def createStoreProps(n: Int, message: Message): List[Props] =
     (1 to n).map(_ => props(message)).toList
 
   sealed trait Operation
