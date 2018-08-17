@@ -1,6 +1,6 @@
 package com.github.miyamoen.quorum
 
-import akka.actor.{ActorRef, LoggingFSM, Props}
+import akka.actor.{Actor, ActorRef, LoggingFSM, Props}
 import com.github.nscala_time.time.Imports._
 
 object Quorum {
@@ -45,6 +45,12 @@ object Quorum {
     def isComplete(stores: List[ActorRef]): Boolean = rest.isEmpty && locked.size + 1 == stores.size
 
     def hasLockedStores: Boolean = locked.nonEmpty
+
+    def nextLockCount(lockedStore: ActorRef)(implicit sender: ActorRef): LockCount = {
+      val restHead :: restTail = rest
+      restHead ! Store.Lock
+      update(rest = restTail, locked = lockedStore :: locked)
+    }
   }
 
   case class LockCountForRead(rest: List[ActorRef], locked: List[ActorRef], replyTo: ActorRef) extends LockCount {
@@ -107,9 +113,7 @@ class Quorum(stores: List[ActorRef])
       goto(Writing) using WriteCount(0, lockCount.replyTo)
 
     case Event(Store.Succeeded(_), lockCount: LockCount) =>
-      val restHead :: restTail = lockCount.rest
-      restHead ! Store.Lock
-      stay() using lockCount.update(rest = restTail, locked = sender() :: lockCount.locked)
+      stay() using lockCount.nextLockCount(sender())
 
     case Event(Store.Failed(_), lockCount: LockCountForRead) if lockCount.hasLockedStores =>
       log.debug("Quorum locked store count: {}", lockCount.locked.size)
