@@ -42,13 +42,17 @@ object Quorum {
 
     def update(rest: List[ActorRef], locked: List[ActorRef]): LockCount
 
-    def isComplete(stores: List[ActorRef]): Boolean = rest.isEmpty && locked.size + 1 == stores.size
+    def isComplete: Boolean = rest.size == 1
 
     def hasLockedStores: Boolean = locked.nonEmpty
 
-    def nextLockCount(lockedStore: ActorRef)(implicit sender: ActorRef): LockCount = {
-      val restHead :: restTail = rest
-      restHead ! Store.Lock
+    def lock()(implicit sender: ActorRef): Unit = rest.head ! Store.Lock
+
+    def release()(implicit sender: ActorRef): Unit = locked.foreach(store => store ! Store.Release)
+
+    def nextLockCount()(implicit sender: ActorRef): LockCount = {
+      val lockedStore :: restTail = rest
+      restTail.head ! Store.Lock
       update(rest = restTail, locked = lockedStore :: locked)
     }
   }
@@ -98,22 +102,22 @@ class Quorum(stores: List[ActorRef])
 
   when(Open) {
     case Event(Read, _) =>
-      goto(Locking) using LockCountForRead(rest = stores.tail, locked = Nil, sender())
+      goto(Locking) using LockCountForRead(rest = stores, locked = Nil, sender())
 
     case Event(Write(message), _) =>
-      goto(Locking) using LockCountForWrite(writeMessage = message, rest = stores.tail, locked = Nil, sender())
+      goto(Locking) using LockCountForWrite(writeMessage = message, rest = stores, locked = Nil, sender())
   }
   when(Locking) {
-    case Event(Store.Succeeded(_), lockCount: LockCountForRead) if lockCount.isComplete(stores) =>
+    case Event(Store.Succeeded(_), lockCount: LockCountForRead) if lockCount.isComplete =>
       log.debug("Quorum finish lock to Read")
       goto(Reading) using MessageCount(Nil, lockCount.replyTo)
 
-    case Event(Store.Succeeded(_), lockCount: LockCountForWrite) if lockCount.isComplete(stores) =>
+    case Event(Store.Succeeded(_), lockCount: LockCountForWrite) if lockCount.isComplete =>
       log.debug("Quorum finish lock to Write")
       goto(Writing) using WriteCount(0, lockCount.replyTo)
 
     case Event(Store.Succeeded(_), lockCount: LockCount) =>
-      stay() using lockCount.nextLockCount(sender())
+      stay() using lockCount.nextLockCount()
 
     case Event(Store.Failed(_), lockCount: LockCountForRead) if lockCount.hasLockedStores =>
       log.debug("Quorum locked store count: {}", lockCount.locked.size)
@@ -124,17 +128,17 @@ class Quorum(stores: List[ActorRef])
       goto(Releasing) using ReleaseCountForWrite(lockCount.writeMessage, lockCount.locked.size, lockCount.replyTo)
 
     case Event(Store.Failed(_), lockCount: LockCount) if !lockCount.hasLockedStores =>
-      goto(Locking) using lockCount.update(rest = stores.tail, locked = Nil)
+      goto(Locking) using lockCount.update(rest = stores, locked = Nil)
   }
 
   when(Releasing) {
     case Event(_: Store.Result, releaseCount: ReleaseCountForRead) if releaseCount.isComplete =>
       log.debug("Quorum finish release for Read")
-      goto(Locking) using LockCountForRead(rest = stores.tail, locked = Nil, releaseCount.replyTo)
+      goto(Locking) using LockCountForRead(rest = stores, locked = Nil, releaseCount.replyTo)
 
     case Event(_: Store.Result, releaseCount: ReleaseCountForWrite) if releaseCount.isComplete =>
       log.debug("Quorum finish release for Write")
-      goto(Locking) using LockCountForWrite(writeMessage = releaseCount.writeMessage, rest = stores.tail, locked = Nil, replyTo = releaseCount.replyTo)
+      goto(Locking) using LockCountForWrite(writeMessage = releaseCount.writeMessage, rest = stores, locked = Nil, replyTo = releaseCount.replyTo)
 
     case Event(_: Store.Result, releaseCount: ReleaseCount) =>
       stay() using releaseCount.update(count = releaseCount.count - 1)
@@ -159,25 +163,19 @@ class Quorum(stores: List[ActorRef])
   }
 
   onTransition {
-    case Open -> Locking =>
-      log.debug("Quorum Lock")
-      stores.head ! Store.Lock
-
+    case state -> Locking =>
+      log.debug("Quorum Lock from {} state", state)
+      nextStateData match {
+        case lockCount: LockCount =>
+          lockCount.lock()
+      }
 
     case Locking -> Releasing =>
       stateData match {
         case lockCount: LockCount =>
           log.debug("Quorum Lock Release")
-          lockCount.locked.foreach(store => store ! Store.Release)
+          lockCount.release()
       }
-
-    case Releasing -> Locking =>
-      log.debug("Quorum Retry Locking")
-      stores.head ! Store.Lock
-
-    case Locking -> Locking =>
-      log.debug("Quorum Immediately Retry Locking")
-      stores.head ! Store.Lock
 
     case Locking -> Reading =>
       log.debug("Quorum Read")
