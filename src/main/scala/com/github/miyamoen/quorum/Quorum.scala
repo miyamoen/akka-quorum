@@ -50,9 +50,8 @@ object Quorum {
 
     def release()(implicit sender: ActorRef): Unit = locked.foreach(store => store ! Store.Release)
 
-    def nextLockCount()(implicit sender: ActorRef): LockCount = {
+    def nextLockCount(): LockCount = {
       val lockedStore :: restTail = rest
-      restTail.head ! Store.Lock
       update(rest = restTail, locked = lockedStore :: locked)
     }
   }
@@ -117,7 +116,7 @@ class Quorum(stores: List[ActorRef])
       goto(Writing) using WriteCount(0, lockCount.replyTo)
 
     case Event(Store.Succeeded(_), lockCount: LockCount) =>
-      stay() using lockCount.nextLockCount()
+      goto(Locking) using lockCount.nextLockCount()
 
     case Event(Store.Failed(_), lockCount: LockCountForRead) if lockCount.hasLockedStores =>
       log.debug("Quorum locked store count: {}", lockCount.locked.size)
