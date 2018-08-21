@@ -8,3 +8,4 @@
 ![](quorum設計.jpg)
 
 ![Quorumの状態遷移図](https://cacoo.com/diagrams/8NszqID4Ir6UXMez)
+![Actorの構成図](https://cacoo.com/diagrams/U1AK8E3E5xYaVxUH#37708)
